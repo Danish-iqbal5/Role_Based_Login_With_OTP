@@ -9,11 +9,10 @@ from rest_framework.permissions import AllowAny
 from datetime import timedelta
 from .models import EmailVerification , Profile
 from .utils import generate_otp  
-from django.utils import timezone# OTP generator function
+from django.utils import timezone
 from django.core.mail import send_mail 
 from .permissions import IsManager
 
-# Create your views here.
 class AdminPanel(APIView):
     pass
 #     permission_classes = [IsAdminUser]
@@ -37,14 +36,14 @@ def register(request):
     if User.objects.filter(email=email).exists():
         return Response({"error": "Email already registered."}, status=status.HTTP_400_BAD_REQUEST)
 
-    # Create user inactive and without password (password will be set after OTP verification)
+   
     user = User.objects.create(username=username, email=email, is_active=False)
 
-    # Generate OTP and expiry time
+    
     otp = generate_otp()
     expires_at = timezone.now() + timedelta(minutes=15)
 
-    # Create or update EmailVerification for this user
+    
     EmailVerification.objects.update_or_create(
         user=user,
         defaults={
@@ -54,7 +53,7 @@ def register(request):
         }
     )
 
-    # Send OTP email (update with your email sending config)
+
     send_mail(
         subject="Your OTP Code",
         message=f"Hello {username}, your OTP code is {otp}. It expires in 15 minutes.",
@@ -94,9 +93,9 @@ def verify_otp(request):
     if verification.otp != otp:
         return Response({"error": "Invalid OTP."}, status=status.HTTP_400_BAD_REQUEST)
 
-    # OTP is valid
-    user.set_password(password)  # Set password now
-    user.is_active = True  # Activate user
+
+    user.set_password(password) 
+    user.is_active = True
     user.save()
 
     verification.is_verified = True
@@ -106,7 +105,7 @@ def verify_otp(request):
 
 
 
-# Protected view
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def protected(request):
@@ -119,21 +118,30 @@ def create_employee(request):
     username = request.data.get('username')
     email = request.data.get('email')
     password = request.data.get('password')
+    employee_role = request.data.get('employee_role')
 
-    if not username or not email or not password:
-        return Response({"error": "All fields are required"}, status=status.HTTP_400_BAD_REQUEST)
+    if not all([username, email, password, employee_role]):
+        return Response({"error": "All fields are required."}, status=400)
+
+    if employee_role not in dict(Profile.EMPLOYEE_ROLE_CHOICES):
+        return Response({"error": "Invalid employee role."}, status=400)
 
     if User.objects.filter(username=username).exists():
-        return Response({"error": "Username already exists"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"error": "Username already exists."}, status=400)
 
     user = User.objects.create_user(username=username, email=email, password=password, is_active=True)
 
-    # Assign employee role + link to manager
-    Profile.objects.filter(user=user).update(role='employee', created_by=request.user)
+   
+    Profile.objects.filter(user=user).update(
+        role='employee',
+        created_by=request.user,
+        employee_role=employee_role
+    )
 
-    return Response({"msg": f"Employee '{username}' created successfully."}, status=status.HTTP_201_CREATED)
+    return Response({"msg": f"Employee '{username}' created with role '{employee_role}'."}, status=201)
 
-@api_view(['POST'])
+
+
 @permission_classes([IsAuthenticated])
 def change_password(request):
     old_password = request.data.get('old_password')
