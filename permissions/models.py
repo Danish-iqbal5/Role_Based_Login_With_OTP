@@ -1,13 +1,12 @@
 from django.db import models
 
-# Create your models here.
 from django.contrib.auth.models import User
 from django.utils import timezone
 import uuid
 
 class EmailVerification(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
-    otp = models.CharField(max_length=6)  # Store OTP, ideally hashed in prod
+    otp = models.CharField(max_length=6) 
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField()
     is_verified = models.BooleanField(default=False)
