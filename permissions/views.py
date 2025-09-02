@@ -1,17 +1,17 @@
 from django.shortcuts import render
 from rest_framework.views import APIView , Response
 from django.contrib.auth.models import  User 
-from rest_framework.permissions import IsAdminUser ,IsAuthenticated
+from rest_framework.permissions import IsAdminUser ,IsAuthenticated , AllowAny
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework.permissions import AllowAny
 from datetime import timedelta
-from .models import EmailVerification , Profile
+from .models import EmailVerification , Profile , Products
 from .utils import generate_otp  
 from django.utils import timezone
 from django.core.mail import send_mail 
 from .permissions import IsManager
+from .serializers import ProductsSerializer
 
 class AdminPanel(APIView):
     pass
@@ -107,9 +107,14 @@ def verify_otp(request):
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def protected(request):
-    return Response({"msg": f"Hello {request.user.username}, you're authenticated!"})
+@permission_classes([AllowAny])
+def products_view(request):
+    products = Products.objects.all()
+    
+    serializer = ProductsSerializer(products, many=True)
+    return Response(serializer.data, status=status.HTTP_200_OK)
+
+   
 
 
 @api_view(['POST'])
@@ -161,3 +166,66 @@ from rest_framework.permissions import BasePermission
 class IsManager(BasePermission):
     def has_permission(self, request, view):
         return hasattr(request.user, 'profile') and request.user.profile.role == 'manager'
+
+from rest_framework.permissions import IsAuthenticated
+
+class product_operations(APIView):
+    permission_classes = [IsAuthenticated]
+    def post(self , request):
+        name = request.data.get('name')
+        description = request.data.get('description', '')
+        price = request.data.get('price')
+        stock = request.data.get('stock')
+
+        if not all([name, price, stock]):
+            return Response({"error": "Name, price, and stock are required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            price = float(price)
+            stock = int(stock)
+        except ValueError:
+            return Response({"error": "Price must be a number and stock must be an integer."}, status=status.HTTP_400_BAD_REQUEST)
+
+        product = Products.objects.create(
+            name=name,
+            description=description,
+            price=price,
+            stock=stock
+        )
+
+        return Response({"msg": f"Product '{product.name}' added successfully."}, status=status.HTTP_201_CREATED)
+    def delete(self, request, pk):
+        try:
+            product = Products.objects.get(pk=pk)
+        except Products.DoesNotExist:
+            return Response({"error": "Product not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        product.delete()
+        return Response({"msg": f"Product '{product.name}' deleted successfully."}, status=status.HTTP_200_OK)
+    def put(self, request, pk):
+        try:
+            product = Products.objects.get(pk=pk)
+        except Products.DoesNotExist:
+            return Response({"error": "Product not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        name = request.data.get('name', product.name)
+        description = request.data.get('description', product.description)
+        price = request.data.get('price', product.price)
+        stock = request.data.get('stock', product.stock)
+
+        if not all([name, price, stock]):
+            return Response({"error": "Name, price, and stock are required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            price = float(price)
+            stock = int(stock)
+        except ValueError:
+            return Response({"error": "Price must be a number and stock must be an integer."}, status=status.HTTP_400_BAD_REQUEST)
+
+        product.name = name
+        product.description = description
+        product.price = price
+        product.stock = stock
+        product.save()
+
+        return Response({"msg": f"Product '{product.name}' updated successfully."}, status=status.HTTP_200_OK)
