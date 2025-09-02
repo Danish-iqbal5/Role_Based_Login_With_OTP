@@ -1,3 +1,6 @@
 Django>=3.2
  djangorestframework
  djangorestframework-simplejwt
+redis
+celery
+django-cors-headers
